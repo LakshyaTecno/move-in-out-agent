@@ -83,6 +83,11 @@ class MoveRequest(BaseModel):
     history: list[HistoryEvent] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_now)
 
+    # Produced by the workflow
+    review: "ReviewBrief | None" = None
+    info_request: str | None = None  # admin's question when status is NEEDS_INFO
+    gate_pass: str | None = None  # issued when the move is scheduled
+
     def doc_types(self) -> set[str]:
         return {d.doc_type for d in self.documents}
 
@@ -109,3 +114,27 @@ class RuleResult(BaseModel):
     status: RuleStatus
     message: str
     blocking: bool = True  # a blocking FAIL prevents approval
+
+
+class Recommendation(StrEnum):
+    APPROVE = "approve"
+    REQUEST_INFO = "request_info"
+    REJECT = "reject"
+
+
+class ReviewBrief(BaseModel):
+    """What the admin sees at the top of a request: policy results plus the
+    review agent's reading of them."""
+
+    summary: str
+    recommendation: Recommendation
+    reasoning: str
+    risk_flags: list[str] = Field(default_factory=list)
+    questions_for_resident: list[str] = Field(default_factory=list)
+    policy_results: list[RuleResult] = Field(default_factory=list)
+    generated_by: str = "agent"  # "agent" or "fallback" when the LLM was unavailable
+    guardrail_note: str | None = None  # set when policy overrode the LLM's recommendation
+    auto_approved: bool = False
+
+
+MoveRequest.model_rebuild()
