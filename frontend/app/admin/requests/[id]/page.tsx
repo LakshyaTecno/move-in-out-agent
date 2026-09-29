@@ -102,6 +102,11 @@ export default function AdminRequestPage() {
                     </ul>
                   </div>
                 )}
+                {review.generated_by === "seed" && (
+                  <p className="text-xs text-slate-500">
+                    Demo request: this brief was pre-written. Requests you create are reviewed live by the agent.
+                  </p>
+                )}
                 {review.generated_by === "fallback" && (
                   <div className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
                     AI was unavailable; this summary was built from the policy checks.

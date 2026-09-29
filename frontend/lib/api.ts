@@ -43,7 +43,7 @@ export interface ReviewBrief {
   reasoning: string;
   risk_flags: string[];
   questions_for_resident: string[];
-  generated_by: "agent" | "fallback";
+  generated_by: "agent" | "fallback" | "seed";
   guardrail_note?: string | null;
   auto_approved: boolean;
 }

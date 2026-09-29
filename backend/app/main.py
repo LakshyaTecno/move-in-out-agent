@@ -38,6 +38,8 @@ app = FastAPI(title="ANACITY Move-in / Move-out Agent", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    # Vercel preview/production URLs for the demo frontend.
+    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app"),
     allow_methods=["*"],
     allow_headers=["*"],
 )
