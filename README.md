@@ -2,6 +2,8 @@
 
 An agentic workflow for residential communities. Residents describe their move in plain language and an AI assistant turns it into a complete request that follows their community's rules. Admins get each request already reviewed, with a recommendation, risk flags, and the policy checks behind it. When a community allows it, the agent approves clean cases and books them on its own.
 
+📄 **[Explanation document](docs/EXPLANATION.md)**: experience, architecture, agent design, assumptions, testing, and production considerations.
+
 **Stack:** FastAPI · LangChain / LangGraph · Gemini · SQLite · Next.js · Tailwind
 
 ## How it works
