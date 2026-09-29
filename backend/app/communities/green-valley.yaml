@@ -1,0 +1,61 @@
+# Large gated community: strict verification, weekend-only moves, and the
+# agent is trusted to auto-approve clean owner move-ins.
+id: green-valley
+name: Green Valley Residency
+doc_catalog:
+  id_proof: Government ID (Aadhaar / Passport)
+  sale_deed: Sale deed or allotment letter
+  rental_agreement: Registered rental agreement
+  police_verification: Police verification certificate
+  owner_noc: NOC from flat owner
+slots:
+  days: [Sat, Sun]
+  windows: ["09:00-13:00", "14:00-18:00"]
+  blackout_dates: [2026-10-20, 2026-11-08]
+  max_per_window: 1
+autonomy:
+  auto_approve: [owner_move_in]
+  auto_schedule: true
+house_rules:
+  - Service lift must be used for all furniture; passenger lifts are off-limits.
+  - Movers must carry a gate pass issued by the management office.
+  - No moving activity on public holidays or outside booked slots.
+request_types:
+  move_in:
+    label: Move-in
+    required_fields: [resident_name, phone, unit, resident_type, move_date, slot, household_size]
+    required_docs:
+      owner: [id_proof, sale_deed]
+      tenant: [id_proof, rental_agreement, police_verification, owner_noc]
+    fees:
+      refundable_damage_deposit: 10000
+    rules:
+      - rule: required_fields
+      - rule: documents_complete
+      - rule: document_validity
+      - rule: lead_time
+        params: {min_days: 3}
+      - rule: slot_allowed
+      - rule: slot_available
+      - rule: unit_available_for_move_in
+    guidance:
+      - Tenants need police verification before moving in; it can take up to a week.
+      - A refundable damage deposit of Rs 10,000 is collected before the slot is confirmed.
+  move_out:
+    label: Move-out
+    required_fields: [resident_name, phone, unit, resident_type, move_date, slot]
+    required_docs:
+      owner: [id_proof]
+      tenant: [id_proof, owner_noc]
+    rules:
+      - rule: required_fields
+      - rule: documents_complete
+      - rule: notice_period
+        params: {min_days: 7}
+      - rule: slot_allowed
+      - rule: slot_available
+      - rule: requester_is_occupant
+      - rule: dues_cleared
+    guidance:
+      - All maintenance dues must be cleared before a gate pass is issued.
+      - A flat inspection is done on moving day; the damage deposit is refunded within 15 days.

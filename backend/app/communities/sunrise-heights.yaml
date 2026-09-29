@@ -1,0 +1,52 @@
+# Smaller society: moves any day, lighter paperwork, shorter notice, but the
+# committee wants a human to approve everything and to book slots manually.
+id: sunrise-heights
+name: Sunrise Heights
+doc_catalog:
+  id_proof: Government ID
+  rental_agreement: Rental agreement
+  owner_noc: NOC from flat owner
+slots:
+  days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+  windows: ["08:00-12:00", "12:00-16:00", "16:00-20:00"]
+  max_per_window: 2
+autonomy:
+  auto_approve: []
+  auto_schedule: false
+house_rules:
+  - Inform the security desk 30 minutes before the moving truck arrives.
+request_types:
+  move_in:
+    label: Move-in
+    required_fields: [resident_name, phone, unit, resident_type, move_date, slot]
+    required_docs:
+      owner: [id_proof]
+      tenant: [id_proof, rental_agreement]
+    rules:
+      - rule: required_fields
+      - rule: documents_complete
+      - rule: lead_time
+        params: {min_days: 1}
+      - rule: slot_allowed
+      - rule: slot_available
+      - rule: unit_available_for_move_in
+        blocking: false
+  move_out:
+    label: Move-out
+    required_fields: [resident_name, phone, unit, resident_type, move_date, slot]
+    required_docs:
+      owner: [id_proof]
+      tenant: [id_proof, owner_noc]
+    rules:
+      - rule: required_fields
+      - rule: documents_complete
+      - rule: notice_period
+        params: {min_days: 3}
+      - rule: slot_allowed
+      - rule: slot_available
+      - rule: requester_is_occupant
+      # Committee allows moving out with dues, settled from the deposit.
+      - rule: dues_cleared
+        blocking: false
+    guidance:
+      - Pending dues can be adjusted against the security deposit.
