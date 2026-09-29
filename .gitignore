@@ -7,3 +7,6 @@ __pycache__/
 node_modules/
 .next/
 .vercel/
+.claude/
+*.db-wal
+*.db-shm

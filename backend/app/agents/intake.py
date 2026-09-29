@@ -14,11 +14,12 @@ from datetime import date, timedelta
 from typing import Literal
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelFallbackMiddleware
 from langchain_core.tools import tool
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from app import services
-from app.agents.llm import get_llm
+from app.agents.llm import LLMUnavailable, get_models
 from app.core.community import get_community
 from app.core.models import Actor, MoveRequest, RuleStatus
 
@@ -61,7 +62,17 @@ def _tools(request_id: str):
     ) -> dict | str:
         """Save any details the resident has given. Pass only fields you learned. move_date must be YYYY-MM-DD;
         slot must exactly match one of the community's windows, e.g. "09:00-13:00". Returns the updated checklist."""
-        fields = {k: v for k, v in locals().items() if v is not None}
+        fields = {
+            "resident_name": resident_name,
+            "phone": phone,
+            "unit": unit,
+            "resident_type": resident_type,
+            "move_date": move_date,
+            "slot": slot,
+            "household_size": household_size,
+            "vehicle_count": vehicle_count,
+            "notes": notes,
+        }
         try:
             req = services.update_details(request_id, fields, actor=Actor.AGENT)
         except Exception as exc:
@@ -114,9 +125,12 @@ How to work:
 - If a date or slot is not allowed or is full, say why and offer alternatives from find_available_slots.
 - Explain rules, fees and house rules when relevant, in plain language. Don't invent rules not listed below.
 - When nothing is missing, show a short summary and ask the resident to confirm. Only after a clear "yes", call
-  submit_request. Then explain what happens next.
+  submit_request. If the resident has already explicitly asked you to submit and nothing is missing, submit
+  right away and include the summary in your reply. Then explain what happens next.
 - After submission, answer status questions using get_checklist. If the admin asked a question, help the
   resident answer it (update details / upload), then resubmit with submit_request once they confirm.
+- Only tell the resident something is saved or submitted if the tool result confirms it. If a tool returns
+  an error ("Could not save", "Not submitted"), explain the problem plainly and how to fix it.
 - You cannot approve or reject requests; the management office decides. Be warm, brief, and practical.
 
 Community rules for this request:
@@ -167,8 +181,18 @@ def _config(request_id: str) -> dict:
 
 def chat(request_id: str, message: str) -> str:
     req = services.get(request_id)
-    agent = create_agent(get_llm(), _tools(request_id), system_prompt=_system_prompt(req), checkpointer=_checkpointer)
-    state = agent.invoke({"messages": [{"role": "user", "content": message}]}, _config(request_id))
+    primary, *fallbacks = get_models()
+    agent = create_agent(
+        primary,
+        _tools(request_id),
+        system_prompt=_system_prompt(req),
+        middleware=[ModelFallbackMiddleware(*fallbacks)] if fallbacks else [],
+        checkpointer=_checkpointer,
+    )
+    try:
+        state = agent.invoke({"messages": [{"role": "user", "content": message}]}, _config(request_id))
+    except Exception as exc:  # every model in the chain failed (quota, network)
+        raise LLMUnavailable("the assistant is busy right now, please try again in a minute") from exc
     return state["messages"][-1].text
 
 

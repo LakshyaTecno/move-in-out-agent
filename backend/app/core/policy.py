@@ -25,6 +25,17 @@ class PolicyContext(BaseModel):
     today: date
 
 
+FIELD_LABELS = {
+    "resident_name": "name",
+    "phone": "phone",
+    "unit": "flat number",
+    "resident_type": "owner or tenant",
+    "move_date": "move date",
+    "slot": "time slot",
+    "household_size": "number of people",
+    "vehicle_count": "vehicles",
+}
+
 RuleFn = Callable[[MoveRequest, PolicyContext, dict], RuleResult]
 RULES: dict[str, RuleFn] = {}
 
@@ -48,7 +59,7 @@ def _same_person(a: str | None, b: str | None) -> bool:
 @rule("required_fields")
 def required_fields(req: MoveRequest, ctx: PolicyContext, params: dict) -> RuleResult:
     fields = ctx.community.request_config(req.request_type).required_fields
-    missing = [f for f in fields if getattr(req, f) in (None, "")]
+    missing = [FIELD_LABELS.get(f, f) for f in fields if getattr(req, f) in (None, "")]
     if missing:
         return _result("required_fields", RuleStatus.FAIL, f"Missing details: {', '.join(missing)}")
     return _result("required_fields", RuleStatus.PASS, "All required details provided")

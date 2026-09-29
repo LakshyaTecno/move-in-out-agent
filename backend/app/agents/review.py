@@ -21,7 +21,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from app import services, store
-from app.agents.llm import get_llm
+from app.agents.llm import get_models
 from app.core.community import get_community
 from app.core.models import Actor, MoveRequest, Recommendation, ReviewBrief, RuleResult, RuleStatus, Status
 from app.core.policy import can_auto_approve, is_approvable
@@ -52,7 +52,8 @@ never say a failing check passes. Your job is what the rules cannot do:
   short forms (e.g. "R. Mehta" vs "Rahul Mehta") as a likely match worth noting, and different people as a risk.
 - Spot inconsistencies or special needs in the resident's notes (e.g. heavy items, extra vehicles, other dates).
 - If the admin earlier asked for information (see HISTORY), say whether this resubmission answers it.
-- Consider the community's guidance and house rules.
+- Consider the community's guidance and house rules. Fees and deposits are collected by the office after
+  approval, outside this system, so don't flag them as unpaid.
 
 Recommend:
 - approve: every blocking check passes and you see no material risk.
@@ -100,8 +101,8 @@ def assess(state: ReviewState) -> ReviewState:
     }
     generated_by = "agent"
     try:
-        llm = get_llm().with_structured_output(Assessment)
-        assessment = llm.invoke(
+        primary, *fallbacks = [m.with_structured_output(Assessment) for m in get_models()]
+        assessment = primary.with_fallbacks(fallbacks).invoke(
             [
                 ("system", SYSTEM_PROMPT.format(community=community.name)),
                 ("human", json.dumps(context, indent=2, default=str)),
