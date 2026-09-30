@@ -101,7 +101,7 @@ def assess(state: ReviewState) -> ReviewState:
     }
     generated_by = "agent"
     try:
-        primary, *fallbacks = [m.with_structured_output(Assessment) for m in get_models()]
+        primary, *fallbacks = [m.with_structured_output(Assessment) for m in get_models("review")]
         assessment = primary.with_fallbacks(fallbacks).invoke(
             [
                 ("system", SYSTEM_PROMPT.format(community=community.name)),

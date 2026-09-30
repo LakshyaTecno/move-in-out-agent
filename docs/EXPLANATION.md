@@ -1,6 +1,6 @@
 # Move-in / Move-out Agentic Workflow: Explanation
 
-**Prototype:** _<Vercel URL>_ · **API:** _<Render URL>_ · **Code:** https://github.com/LakshyaTecno/move-in-out-agent
+**Prototype:** https://move-in-out-agent.vercel.app · **API:** https://move-in-out-agent-api.onrender.com · **Code:** https://github.com/LakshyaTecno/move-in-out-agent
 
 > The hosted backend runs on a free tier that sleeps when idle. The first request after a pause can take about 30–60 seconds.
 
@@ -235,8 +235,9 @@ The **Community rules** page in the prototype shows this side by side.
 
 1. **A hallucinated success.** A bug in a tool meant nothing was saved, and the agent still told the resident *"I've saved your details."* The tool was fixed, a regression test was added, and the prompt now forbids confirming anything a tool didn't confirm. This is also why the checklist panel, not the chat, is the resident's source of truth.
 2. **The model was retired.** `gemini-2.5-flash` returned 404 for new keys. The default moved to `gemini-3.8-flash`, and the model list is now configurable.
-3. **Free-tier limits (5 requests/min per model).** One agent turn makes several model calls. The fix is a **fallback chain across models** that each have their own quota (`ModelFallbackMiddleware` for the agent, `with_fallbacks` for the review), with retries off so a 429 moves on straight away.
+3. **Free-tier limits (5 requests/min per model, shared by everyone using the key).** One agent turn makes several model calls. The fix is a **fallback chain across models** that each have their own quota (`ModelFallbackMiddleware` for the agent, `with_fallbacks` for the review), with retries off so a 429 moves on straight away.
 4. **Over-cautious confirmation.** The agent asked for confirmation after the resident had already said "yes please submit". The prompt now allows submitting directly when the request is explicit and complete.
+5. **Slow turns on the hosted demo (25–50s).** Timing each model showed a trivial call taking 0.8s on `gemini-3.1-flash-lite`, 5.5s on `gemini-3.8-flash` (it "thinks" first) and 29s on `gemini-3.5-flash`, which was the first fallback. Benchmarking a full agent turn, `flash-lite` finished in 5.1s with the same correct behaviour. The agents now use **different chains for different jobs**: chat leads with the fastest model because it makes several calls per turn; review leads with the strongest because it's one call where judgement matters most. The slow model was dropped and the timeout cut to 20s.
 
 ---
 

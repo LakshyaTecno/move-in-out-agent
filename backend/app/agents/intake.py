@@ -181,7 +181,7 @@ def _config(request_id: str) -> dict:
 
 def chat(request_id: str, message: str) -> str:
     req = services.get(request_id)
-    primary, *fallbacks = get_models()
+    primary, *fallbacks = get_models("chat")
     agent = create_agent(
         primary,
         _tools(request_id),
