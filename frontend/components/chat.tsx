@@ -34,7 +34,8 @@ export function Chat({ requestId, onRequestUpdate }: { requestId: string; onRequ
     setMessages((m) => [...m, { role: "user", content: message }]);
     setThinking(true);
     try {
-      const { reply, request } = await api.chat(requestId, message);
+      // One silent retry: the first call after the free host wakes up can time out.
+      const { reply, request } = await api.chat(requestId, message).catch(() => api.chat(requestId, message));
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
       onRequestUpdate(request);
     } catch (e) {
