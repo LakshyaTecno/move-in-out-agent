@@ -230,6 +230,9 @@ The **Community rules** page in the prototype shows this side by side.
 | *"I am Karan Shah, renting B-302, moving in next Saturday morning with my wife. My number is 9812345678"* | All 7 fields extracted in one turn: date resolved, "morning" mapped to `09:00-13:00`, household size 2 from "with my wife" |
 | Owner move-in (Asha Rao, A-101) via the UI | Submitted, **auto-approved, scheduled, gate pass issued** by the agent with no human involved |
 | Tenant with the NOC made out to "Karan Shaw" | Review agent flagged the name mismatch, accepted "K. Shah" on the rental agreement, recommended *request info*, and drafted the question to the resident |
+| Tenant move-out where every rule passes, but the note says *"Owner NOC attached is from the previous landlord, new owner is signing this week"* (hosted) | Review agent flagged the NOC as invalid from the note alone and recommended *request info*, asking for an NOC from the current owner. No rule could catch this (3.9s on the live site) |
+| Tenant asks for a Wednesday in a weekend-only community (hosted) | Agent saved the valid details, **refused to save the disallowed date**, explained the rule and offered real weekend slots. After *"Sunday 11th Oct morning then"* it saved `2026-10-11 09:00-13:00` |
+| *"Arjun Das here, I own 202 and am moving out next Friday evening"* (hosted, 3 runs) | All 3 runs saved Oct 9 `16:00-20:00` (Sunrise Heights' evening window), taking 2.4–14s per turn |
 
 ### Problems found by testing, and what changed
 
