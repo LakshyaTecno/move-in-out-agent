@@ -23,6 +23,7 @@ Admin actions ──────────────────────
 - **The state machine** (`backend/app/core/state_machine.py`) controls who may change a request's status. The agent can approve (only when policy allows it) and schedule, but only a human can reject.
 - **The intake agent** extracts details, asks only for what's missing, explains the rules, and submits once the resident confirms.
 - **The review graph** writes the admin brief, catches what rules can't (for example name mismatches across documents), and auto-approves only when policy, the community's config, and the LLM all agree.
+- **AI document verification:** uploads are read by Gemini (multimodal) for type, names and expiry; a `documents_verified` policy rule judges those facts in code. Only the extracted facts are stored, never the file. Fictional test documents are in `samples/documents/` (regenerate with `cd backend && uv run python scripts/make_sample_docs.py`; real-model eval: `uv run python scripts/eval_documents.py`).
 - **Resilience:** Gemini calls fall back along a chain of models. If AI is unavailable, the review is built from the policy checks and residents can use the form instead.
 
 ## Run locally
