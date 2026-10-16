@@ -21,6 +21,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from app import services, store
+from app.agents.documents import SPECIMEN_NOTE, accept_specimens
 from app.agents.llm import get_models
 from app.core.community import get_community
 from app.core.models import Actor, MoveRequest, Recommendation, ReviewBrief, RuleResult, RuleStatus, Status
@@ -104,7 +105,8 @@ def assess(state: ReviewState) -> ReviewState:
         primary, *fallbacks = [m.with_structured_output(Assessment) for m in get_models("review")]
         assessment = primary.with_fallbacks(fallbacks).invoke(
             [
-                ("system", SYSTEM_PROMPT.format(community=community.name)),
+                ("system", SYSTEM_PROMPT.format(community=community.name)
+                 + ("\n" + SPECIMEN_NOTE if accept_specimens() else "")),
                 ("human", json.dumps(context, indent=2, default=str)),
             ]
         )

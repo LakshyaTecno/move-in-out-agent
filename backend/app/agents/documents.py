@@ -37,17 +37,21 @@ Document type keys (pick one, or 'other' if none fit):
 
 SPECIMEN_NOTE = (
     "This environment uses test documents watermarked 'SPECIMEN' or marked '(SAMPLE)'. "
-    "Read them like real documents and do not treat the watermark as a problem."
+    "Read them like real documents, do not treat the watermark as a problem, and do not mention it."
 )
+
+
+def accept_specimens() -> bool:
+    """Demo/test switch, shared by the document reader and the review agent."""
+    return os.getenv("DOC_CHECK_ACCEPT_SPECIMENS", "true").lower() == "true"
 
 
 def read_document(content: bytes, mime_type: str, catalog: dict[str, str]) -> DocumentReading:
     """Raises LLMUnavailable if no model could read it; the caller then stores
     the document as unchecked so a human reviews it."""
     catalog_text = "\n".join(f"- {key}: {label}" for key, label in catalog.items())
-    accept_specimens = os.getenv("DOC_CHECK_ACCEPT_SPECIMENS", "true").lower() == "true"
     messages = [
-        SystemMessage(SYSTEM.format(catalog=catalog_text, specimen_note=SPECIMEN_NOTE if accept_specimens else "")),
+        SystemMessage(SYSTEM.format(catalog=catalog_text, specimen_note=SPECIMEN_NOTE if accept_specimens() else "")),
         HumanMessage(content=[
             {"type": "text", "text": "Read this document."},
             {"type": "file" if mime_type == "application/pdf" else "image",
