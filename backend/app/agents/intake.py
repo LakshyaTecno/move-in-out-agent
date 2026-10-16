@@ -21,6 +21,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from app import services
 from app.agents.llm import LLMUnavailable, get_models
 from app.core.community import get_community
+from app.core.doc_checks import verdict
 from app.core.models import Actor, MoveRequest, RuleStatus
 
 _checkpointer = SqliteSaver(sqlite3.connect(os.getenv("CHECKPOINT_DB", "checkpoints.db"), check_same_thread=False))
@@ -38,6 +39,11 @@ def checklist(req: MoveRequest) -> dict:
         "missing_fields": [f for f in rt.required_fields if getattr(req, f) in (None, "")],
         "documents_uploaded": [community.doc_catalog.get(d, d) for d in req.doc_types()],
         "documents_missing": [community.doc_catalog[d] for d in required_docs if d not in req.doc_types()],
+        "document_checks": [
+            {"doc_type": d.doc_type, "document": community.doc_catalog.get(d.doc_type, d.doc_type), "verdict": v, "detail": m}
+            for d in req.documents
+            for v, m in [verdict(d, req.resident_name, community.doc_catalog, req.move_date or services.today())]
+        ],
         "issues": [r.message for r in results if r.status == RuleStatus.FAIL],
         "warnings": [r.message for r in results if r.status == RuleStatus.WARN],
         "fees": rt.fees,
@@ -122,7 +128,8 @@ How to work:
   dates ("next Saturday") to YYYY-MM-DD using the dates above. Match slot wording ("morning") to an exact window.
 - Then ask for what's still missing, a couple of items at a time. Never ask for something already known.
 - Documents are uploaded with the upload panel next to this chat, not in the chat. Tell the resident which ones
-  are still needed by name.
+  are still needed by name. Each upload is read and checked automatically: if a document check shows a problem
+  (wrong document, a name that doesn't match, expired), explain it plainly and ask for a corrected upload.
 - If a date or slot is not allowed or is full, say why and offer alternatives from find_available_slots.
 - Explain rules, fees and house rules when relevant, in plain language. Don't invent rules not listed below.
 - When nothing is missing, show a short summary and ask the resident to confirm. Only after a clear "yes", call

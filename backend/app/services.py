@@ -11,7 +11,8 @@ from pydantic import ValidationError
 
 from app import store
 from app.core.community import get_community
-from app.core.models import Actor, Document, HistoryEvent, MoveRequest, RequestType, RuleResult, Status
+from app.core.doc_checks import names_match, verdict
+from app.core.models import Actor, Document, DocumentCheck, HistoryEvent, MoveRequest, RequestType, RuleResult, Status
 from app.core.policy import PolicyContext, evaluate, is_approvable
 from app.core.state_machine import transition
 
@@ -121,6 +122,45 @@ def add_document(request_id: str, doc: Document) -> MoveRequest:
         raise ServiceError(f"Unknown document type {doc.doc_type}")
     req.documents = [d for d in req.documents if d.doc_type != doc.doc_type] + [doc]
     _log(req, Actor.RESIDENT, "document_uploaded", catalog[doc.doc_type])
+    return store.save_request(req)
+
+
+def upload_document_file(request_id: str, doc_type: str, file_name: str, content: bytes, mime_type: str) -> MoveRequest:
+    """Real file upload: the AI reads it, we keep only what it read."""
+    from app.agents.documents import ALLOWED_TYPES, MAX_BYTES, read_document  # avoid import cycle
+    from app.agents.llm import LLMUnavailable
+
+    req = get(request_id)
+    if req.status not in EDITABLE:
+        raise ServiceError(f"Documents can't be changed while {req.status}")
+    catalog = get_community(req.community_id).doc_catalog
+    if doc_type not in catalog:
+        raise ServiceError(f"Unknown document type {doc_type}")
+    if mime_type not in ALLOWED_TYPES:
+        raise ServiceError("Upload a PNG, JPG, WEBP image or a PDF")
+    if not content or len(content) > MAX_BYTES:
+        raise ServiceError("File must be between 1 byte and 5 MB")
+
+    try:
+        reading = read_document(content, mime_type, catalog)
+        check = DocumentCheck(
+            readable=reading.is_readable_document,
+            detected_type=reading.detected_type if reading.detected_type in catalog else "other",
+            names_found=reading.names,
+            ai_notes=reading.notes or None,
+        )
+        valid_until = reading.valid_until
+    except LLMUnavailable:
+        check, valid_until = DocumentCheck(checked_by="unavailable"), None
+
+    name_on_doc = next((n for n in check.names_found if req.resident_name and names_match(n, req.resident_name)),
+                       check.names_found[0] if check.names_found else None)
+    doc = Document(doc_type=doc_type, file_name=file_name, name_on_document=name_on_doc,
+                   valid_until=valid_until, check=check)
+    req.documents = [d for d in req.documents if d.doc_type != doc_type] + [doc]
+    _log(req, Actor.RESIDENT, "document_uploaded", catalog[doc_type])
+    _, message = verdict(doc, req.resident_name, catalog)
+    _log(req, Actor.AGENT, "document_checked", message)
     return store.save_request(req)
 
 

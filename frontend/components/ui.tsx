@@ -47,6 +47,7 @@ export const FIELD_LABEL: Record<string, string> = {
 export const RULE_LABEL: Record<string, string> = {
   required_fields: "Details complete",
   documents_complete: "Documents complete",
+  documents_verified: "Documents verified by AI",
   document_validity: "Documents valid",
   lead_time: "Advance booking",
   notice_period: "Notice period",

@@ -3,10 +3,16 @@
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
-import { api, type Community, type MoveRequest } from "@/lib/api";
+import { api, type Community, type DocVerdict, type MoveRequest } from "@/lib/api";
 
-/** The prototype records document metadata (type, file name, name on it,
- *  expiry) rather than storing files; see the explanation doc. */
+const VERDICT_STYLE: Record<DocVerdict, { box: string; icon: string; label: string }> = {
+  verified: { box: "border-emerald-200 bg-emerald-50/60", icon: "✓", label: "Verified by AI" },
+  problem: { box: "border-red-200 bg-red-50/60", icon: "✕", label: "Problem found" },
+  unverified: { box: "border-amber-200 bg-amber-50/60", icon: "!", label: "Not verified, the office will check it" },
+  waiting: { box: "border-slate-200 bg-slate-50", icon: "…", label: "Will be matched once your name is added" },
+};
+
+/** Each file is read by the AI on upload; only what it read is stored, never the file. */
 export function DocumentUpload({
   request,
   community,
@@ -20,28 +26,33 @@ export function DocumentUpload({
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState<string | null>(null); // doc type being uploaded
-  const [file, setFile] = useState<File | null>(null);
-  const [nameOn, setNameOn] = useState("");
-  const [validUntil, setValidUntil] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null); // doc type currently being read
   const [error, setError] = useState("");
 
   const required = request.resident_type
     ? (community.request_types[request.request_type].required_docs[request.resident_type] ?? [])
     : [];
   const uploaded = new Map(request.documents.map((d) => [d.doc_type, d]));
+  const checks = new Map(request.checklist.document_checks.map((c) => [c.doc_type, c]));
 
-  async function run(action: () => Promise<MoveRequest>) {
-    setBusy(true);
+  async function setResidentType(t: "owner" | "tenant") {
     setError("");
     try {
-      onUploaded(await action());
-      return true;
+      onUploaded(await api.updateRequest(request.id, { resident_type: t }));
     } catch (e) {
       setError((e as Error).message);
-      return false;
+    }
+  }
+
+  async function upload(docType: string, file: File) {
+    setBusy(docType);
+    setError("");
+    try {
+      onUploaded(await api.uploadFile(request.id, docType, file));
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -52,12 +63,7 @@ export function DocumentUpload({
         {editable ? (
           <div className="flex gap-2">
             {(["owner", "tenant"] as const).map((t) => (
-              <Button
-                key={t}
-                variant="secondary"
-                disabled={busy}
-                onClick={() => run(() => api.updateRequest(request.id, { resident_type: t }))}
-              >
+              <Button key={t} variant="secondary" onClick={() => setResidentType(t)}>
                 I&apos;m {t === "owner" ? "the owner" : "a tenant"}
               </Button>
             ))}
@@ -68,107 +74,61 @@ export function DocumentUpload({
     );
   }
 
-  function pick(docType: string) {
-    setTarget(docType);
-    setFile(null);
-    setNameOn(request.resident_name ?? "");
-    setValidUntil("");
-    setError("");
-    fileInput.current?.click();
-  }
-
-  async function save() {
-    if (!target || !file) return;
-    const ok = await run(() =>
-      api.uploadDocument(request.id, {
-        doc_type: target,
-        file_name: file.name,
-        name_on_document: nameOn || null,
-        valid_until: validUntil || null,
-      }),
-    );
-    if (ok) setTarget(null);
-  }
-
   return (
     <div className="space-y-2">
       <input
         ref={fileInput}
         type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
+        accept=".pdf,.jpg,.jpeg,.png,.webp"
         className="hidden"
         onChange={(e) => {
-          setFile(e.target.files?.[0] ?? null);
+          const file = e.target.files?.[0];
           e.target.value = ""; // allow picking the same file again
+          if (file && target) upload(target, file);
         }}
       />
+      <p className="text-xs text-slate-500">Each upload is read and checked automatically by AI.</p>
       <ul className="space-y-2">
         {required.map((docType) => {
           const doc = uploaded.get(docType);
-          const active = target === docType && file;
+          const check = checks.get(docType);
+          const style = check ? VERDICT_STYLE[check.verdict] : null;
+          const reading = busy === docType;
           return (
-            <li
-              key={docType}
-              className={`rounded-lg border px-3 py-2 text-sm ${doc ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200"}`}
-            >
+            <li key={docType} className={`rounded-lg border px-3 py-2 text-sm ${style?.box ?? "border-slate-200"}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-medium">
-                    {doc ? <span className="text-emerald-700">✓ </span> : null}
+                    {style && <span className="mr-1">{style.icon}</span>}
                     {community.doc_catalog[docType]}
                   </div>
-                  {doc && (
-                    <div className="truncate text-xs text-slate-500">
-                      {doc.file_name}
-                      {doc.name_on_document && ` · ${doc.name_on_document}`}
-                      {doc.valid_until && ` · valid until ${doc.valid_until}`}
+                  {reading && <div className="text-xs text-slate-600">Reading document with AI…</div>}
+                  {!reading && doc && check && (
+                    <div className="text-xs text-slate-600">
+                      <span className="font-medium">{style?.label}</span>
+                      {check.verdict === "problem" && <span>: {check.detail.split(": ").slice(1).join(": ")}</span>}
+                      <div className="truncate text-slate-500">
+                        {doc.file_name}
+                        {doc.name_on_document && ` · ${doc.name_on_document}`}
+                        {doc.valid_until && ` · valid until ${doc.valid_until}`}
+                      </div>
                     </div>
                   )}
                 </div>
-                {editable && !active && (
+                {editable && (
                   <Button
                     variant={doc ? "secondary" : "primary"}
                     className="shrink-0 px-2.5 py-1 text-xs"
-                    disabled={busy}
-                    onClick={() => pick(docType)}
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setTarget(docType);
+                      fileInput.current?.click();
+                    }}
                   >
-                    {doc ? "Replace" : "Choose file"}
+                    {reading ? "Reading…" : doc ? "Replace" : "Choose file"}
                   </Button>
                 )}
               </div>
-
-              {active && (
-                <div className="mt-2 space-y-2 rounded-md bg-slate-50 p-2">
-                  <div className="truncate text-xs text-slate-700">📎 {file.name}</div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <label className="text-xs text-slate-600">
-                      Name on document
-                      <input
-                        className="mt-0.5 w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs"
-                        value={nameOn}
-                        onChange={(e) => setNameOn(e.target.value)}
-                      />
-                    </label>
-                    <label className="text-xs text-slate-600">
-                      Valid until (optional)
-                      <input
-                        className="mt-0.5 w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs"
-                        type="date"
-                        value={validUntil}
-                        onChange={(e) => setValidUntil(e.target.value)}
-                      />
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button className="px-2.5 py-1 text-xs" disabled={busy} onClick={save}>
-                      {busy ? "Uploading…" : "Upload"}
-                    </Button>
-                    <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setTarget(null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
             </li>
           );
         })}

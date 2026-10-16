@@ -42,15 +42,27 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class DocumentCheck(BaseModel):
+    """What the AI read from an uploaded file: facts only. Whether those facts
+    are acceptable (right type, right person) is judged live by the
+    documents_verified policy rule, so it re-evaluates if the request changes."""
+
+    readable: bool | None = None  # None = not checked (AI unavailable)
+    detected_type: str | None = None  # doc_catalog key, or "other"
+    names_found: list[str] = Field(default_factory=list)
+    ai_notes: str | None = None
+    checked_by: str = "agent"  # "agent", or "unavailable" when the AI couldn't be reached
+
+
 class Document(BaseModel):
-    """Prototype stores document metadata only; the name/date fields let the
-    review agent spot inconsistencies (e.g. agreement name != resident name)."""
+    """The uploaded file itself isn't stored, only what was read from it."""
 
     doc_type: str  # key from the community's doc_catalog
     file_name: str
     name_on_document: str | None = None
-    valid_until: date | None = None
+    valid_until: date | None = None  # read by the AI when the file is checked
     uploaded_at: datetime = Field(default_factory=_now)
+    check: DocumentCheck | None = None  # None for documents that were never AI-checked
 
 
 class HistoryEvent(BaseModel):

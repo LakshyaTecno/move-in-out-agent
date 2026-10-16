@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from app.core.community import get_community, load_communities
-from app.core.models import Actor, Document, MoveRequest, RequestType, ResidentType, RuleStatus, Status, UnitRecord
+from app.core.models import Actor, Document, DocumentCheck, MoveRequest, RequestType, ResidentType, RuleStatus, Status, UnitRecord
 from app.core.policy import PolicyContext, can_auto_approve, evaluate, is_approvable, validate_config
 from app.core.state_machine import InvalidTransition, allowed_next, transition
 
@@ -13,6 +13,11 @@ NEXT_SAT = date(2026, 10, 10)  # 10 days out
 
 def statuses(results):
     return {r.rule: r.status for r in results}
+
+
+def read_as(doc_type: str, *names: str, readable: bool = True) -> DocumentCheck:
+    """What the AI would have read from a correct upload."""
+    return DocumentCheck(readable=readable, detected_type=doc_type, names_found=list(names))
 
 
 def owner_move_in(community_id: str, **overrides) -> MoveRequest:
@@ -27,8 +32,8 @@ def owner_move_in(community_id: str, **overrides) -> MoveRequest:
         slot="09:00-13:00",
         household_size=3,
         documents=[
-            Document(doc_type="id_proof", file_name="aadhaar.pdf"),
-            Document(doc_type="sale_deed", file_name="deed.pdf"),
+            Document(doc_type="id_proof", file_name="aadhaar.pdf", check=read_as("id_proof", "Asha Rao")),
+            Document(doc_type="sale_deed", file_name="deed.pdf", check=read_as("sale_deed", "Asha Rao")),
         ],
     )
     return MoveRequest(**(fields | overrides))

@@ -14,6 +14,7 @@ from datetime import date
 from pydantic import BaseModel
 
 from app.core.community import CommunityConfig, RuleSpec
+from app.core.doc_checks import Verdict, verdict
 from app.core.models import MoveRequest, RuleResult, RuleStatus, UnitRecord
 
 
@@ -75,6 +76,23 @@ def documents_complete(req: MoveRequest, ctx: PolicyContext, params: dict) -> Ru
         labels = [ctx.community.doc_catalog.get(d, d) for d in missing]
         return _result("documents_complete", RuleStatus.FAIL, f"Missing documents: {', '.join(labels)}")
     return _result("documents_complete", RuleStatus.PASS, "All required documents uploaded")
+
+
+@rule("documents_verified")
+def documents_verified(req: MoveRequest, ctx: PolicyContext, params: dict) -> RuleResult:
+    """Uploaded files must be what they claim to be and name the resident. A
+    document the AI couldn't check is a warning: a human looks, and it can
+    never be auto-approved."""
+    name = "documents_verified"
+    if not req.documents:
+        return _result(name, RuleStatus.PENDING, "No documents uploaded yet")
+    verdicts = [verdict(d, req.resident_name, ctx.community.doc_catalog) for d in req.documents]
+    for level, status in ((Verdict.PROBLEM, RuleStatus.FAIL), (Verdict.WAITING, RuleStatus.PENDING),
+                          (Verdict.UNVERIFIED, RuleStatus.WARN)):
+        messages = [m for v, m in verdicts if v == level]
+        if messages:
+            return _result(name, status, "; ".join(messages))
+    return _result(name, RuleStatus.PASS, "All uploaded documents verified by AI")
 
 
 @rule("document_validity")

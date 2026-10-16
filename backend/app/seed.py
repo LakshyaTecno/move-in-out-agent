@@ -11,6 +11,7 @@ from app import services, store
 from app.core.models import (
     Actor,
     Document,
+    DocumentCheck,
     MoveRequest,
     Recommendation,
     RequestType,
@@ -49,7 +50,12 @@ def _next(day: str, min_days: int, today: date) -> date:
 
 
 def _docs(*pairs: tuple[str, str]) -> list[Document]:
-    return [Document(doc_type=t, file_name=f"{t}.pdf", name_on_document=n) for t, n in pairs]
+    """Seeded documents look as if the AI had already read them."""
+    return [
+        Document(doc_type=t, file_name=f"{t}.pdf", name_on_document=n,
+                 check=DocumentCheck(readable=True, detected_type=t, names_found=[n]))
+        for t, n in pairs
+    ]
 
 
 def _demo_requests(today: date) -> list[tuple[MoveRequest, dict]]:

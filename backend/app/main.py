@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, Query, Request  # noqa: E402
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
@@ -125,6 +125,14 @@ def update_request(request_id: str, fields: dict):
 @app.post("/requests/{request_id}/documents")
 def upload_document(request_id: str, doc: Document):
     return _view(services.add_document(request_id, doc), Actor.RESIDENT)
+
+
+@app.post("/requests/{request_id}/documents/upload")
+def upload_document_file(request_id: str, doc_type: str = Form(...), file: UploadFile = File(...)):
+    """Real file upload: the AI reads the document and checks it."""
+    content = file.file.read()
+    req = services.upload_document_file(request_id, doc_type, file.filename or "upload", content, file.content_type or "")
+    return _view(req, Actor.RESIDENT)
 
 
 @app.post("/requests/{request_id}/submit")

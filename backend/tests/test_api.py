@@ -7,16 +7,37 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import services
+from app.agents.documents import DocumentReading
+
+
+def fake_read_document(content: bytes, mime_type: str, catalog: dict) -> DocumentReading:
+    """Stands in for Gemini: the test file's bytes say what the 'AI' should read,
+    e.g. b"type=id_proof;name=Asha Rao;valid=2030-01-01;readable=1"."""
+    fields = dict(part.split("=", 1) for part in content.decode().split(";"))
+    return DocumentReading(
+        is_readable_document=fields.get("readable", "1") == "1",
+        detected_type=fields["type"],
+        names=[n for n in fields.get("name", "").split("|") if n],
+        valid_until=fields.get("valid") or None,
+        notes="",
+    )
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "")
     monkeypatch.setattr("app.store.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("app.agents.documents.read_document", fake_read_document)
     from app.main import app
 
     with TestClient(app) as c:
         yield c
+
+
+def upload(client, rid, doc_type, *, reads_as=None, name="Asha Rao", valid="", readable="1"):
+    body = f"type={reads_as or doc_type};name={name};valid={valid};readable={readable}".encode()
+    return client.post(f"/requests/{rid}/documents/upload", data={"doc_type": doc_type},
+                       files={"file": (f"{doc_type}.png", body, "image/png")})
 
 
 def next_weekday(name: str, min_days: int = 10) -> str:
@@ -26,12 +47,17 @@ def next_weekday(name: str, min_days: int = 10) -> str:
     return d.isoformat()
 
 
-def make_request(client, community, kind, fields, docs):
+def make_request(client, community, kind, fields, docs, verified=True):
+    """verified=True uploads real files that the (fake) AI reads; False uses the
+    old metadata-only endpoint, so documents stay unverified."""
     req = client.post("/requests", json={"community_id": community, "request_type": kind}).json()
     assert req["greeting"]
     client.patch(f"/requests/{req['id']}", json=fields)
     for doc_type in docs:
-        client.post(f"/requests/{req['id']}/documents", json={"doc_type": doc_type, "file_name": f"{doc_type}.pdf"})
+        if verified:
+            upload(client, req["id"], doc_type, name=fields.get("resident_name", ""))
+        else:
+            client.post(f"/requests/{req['id']}/documents", json={"doc_type": doc_type, "file_name": f"{doc_type}.pdf"})
     return req["id"]
 
 

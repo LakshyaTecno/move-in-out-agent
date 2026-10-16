@@ -20,12 +20,30 @@ export interface RuleResult {
   blocking: boolean;
 }
 
+export interface DocumentCheck {
+  readable?: boolean | null;
+  detected_type?: string | null;
+  names_found: string[];
+  ai_notes?: string | null;
+  checked_by: "agent" | "unavailable";
+}
+
 export interface Doc {
   doc_type: string;
   file_name: string;
   name_on_document?: string | null;
   valid_until?: string | null;
   uploaded_at?: string;
+  check?: DocumentCheck | null;
+}
+
+export type DocVerdict = "verified" | "problem" | "unverified" | "waiting";
+
+export interface DocCheckResult {
+  doc_type: string;
+  document: string;
+  verdict: DocVerdict;
+  detail: string;
 }
 
 export interface HistoryEvent {
@@ -56,6 +74,7 @@ export interface Checklist {
   issues: string[];
   warnings: string[];
   fees: Record<string, number>;
+  document_checks: DocCheckResult[];
   admin_question?: string | null;
   gate_pass?: string | null;
 }
@@ -137,6 +156,18 @@ export const api = {
   updateRequest: (id: string, fields: Partial<MoveRequest>) =>
     call<MoveRequest>(`/requests/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
   uploadDocument: (id: string, doc: Doc) => post<MoveRequest>(`/requests/${id}/documents`, doc),
+  uploadFile: async (id: string, docType: string, file: File): Promise<MoveRequest> => {
+    // Multipart form: the browser sets the Content-Type (with boundary) itself.
+    const form = new FormData();
+    form.append("doc_type", docType);
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/requests/${id}/documents/upload`, { method: "POST", body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail ?? `Upload failed (${res.status})`);
+    }
+    return res.json();
+  },
   submit: (id: string) => post<MoveRequest>(`/requests/${id}/submit`),
   cancel: (id: string, reason?: string) => post<MoveRequest>(`/requests/${id}/cancel`, { reason }),
   chatHistory: (id: string) => call<ChatMessage[]>(`/requests/${id}/chat`),

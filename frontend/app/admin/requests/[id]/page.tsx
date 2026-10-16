@@ -140,17 +140,26 @@ export default function AdminRequestPage() {
             </dl>
             <h3 className="mb-1 mt-4 text-sm font-medium text-slate-700">Documents</h3>
             <ul className="space-y-1 text-sm">
-              {req.documents.map((d) => (
-                <li key={d.doc_type}>
-                  <span className="font-medium">{community.doc_catalog[d.doc_type] ?? d.doc_type}</span>
-                  <span className="text-slate-500">
-                    {" "}
-                    · {d.file_name}
-                    {d.name_on_document && ` · name: ${d.name_on_document}`}
-                    {d.valid_until && ` · valid until ${d.valid_until}`}
-                  </span>
-                </li>
-              ))}
+              {req.documents.map((d) => {
+                const check = req.checklist.document_checks.find((c) => c.doc_type === d.doc_type);
+                const tone =
+                  check?.verdict === "verified" ? "text-emerald-700" : check?.verdict === "problem" ? "text-red-700" : "text-amber-700";
+                return (
+                  <li key={d.doc_type}>
+                    <span className="font-medium">{community.doc_catalog[d.doc_type] ?? d.doc_type}</span>
+                    <span className="text-slate-500">
+                      {" "}
+                      · {d.file_name}
+                      {d.valid_until && ` · valid until ${d.valid_until}`}
+                    </span>
+                    {check && <div className={`text-xs ${tone}`}>AI check: {check.detail}</div>}
+                    {d.check?.names_found.length ? (
+                      <div className="text-xs text-slate-500">Names read: {d.check.names_found.join(", ")}</div>
+                    ) : null}
+                    {d.check?.ai_notes && <div className="text-xs text-slate-500">AI note: {d.check.ai_notes}</div>}
+                  </li>
+                );
+              })}
               {req.documents.length === 0 && <li className="text-slate-500">None</li>}
             </ul>
           </Card>

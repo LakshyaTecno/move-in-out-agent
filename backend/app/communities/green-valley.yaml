@@ -32,6 +32,7 @@ request_types:
     rules:
       - rule: required_fields
       - rule: documents_complete
+      - rule: documents_verified
       - rule: document_validity
       - rule: lead_time
         params: {min_days: 3}
@@ -50,6 +51,7 @@ request_types:
     rules:
       - rule: required_fields
       - rule: documents_complete
+      - rule: documents_verified
       - rule: notice_period
         params: {min_days: 7}
       - rule: slot_allowed

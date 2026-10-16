@@ -14,6 +14,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 DEFAULT_CHAINS = {
     "chat": "gemini-3.1-flash-lite,gemini-3.8-flash,gemini-flash-lite-latest",
     "review": "gemini-3.8-flash,gemini-3.1-flash-lite,gemini-flash-lite-latest",
+    # Reading a document is transcription, not judgement; the fast model reads them accurately.
+    "document": "gemini-3.1-flash-lite,gemini-3.8-flash,gemini-flash-lite-latest",
 }
 
 
