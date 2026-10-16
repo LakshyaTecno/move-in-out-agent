@@ -59,7 +59,8 @@ def _docs(*pairs: tuple[str, str]) -> list[Document]:
 
 
 def _demo_requests(today: date) -> list[tuple[MoveRequest, dict]]:
-    # Karan Shah (B-302) is deliberately not seeded: he's created live in the demo.
+    # Karan Shah (B-302 move-in) and Rahul Mehta (A-201 move-out) are deliberately not
+    # seeded: they are created live in the demo.
     sun = _next("Sun", 8, today)
     return [
         (
@@ -74,21 +75,6 @@ def _demo_requests(today: date) -> list[tuple[MoveRequest, dict]]:
                 reasoning="Green Valley requires dues to be cleared before a gate pass is issued. Everything else checks out.",
                 risk_flags=["Rs 8,200 maintenance dues outstanding"],
                 questions_for_resident=["Please clear the outstanding maintenance dues of Rs 8,200 so we can issue your gate pass."],
-            ),
-        ),
-        (
-            MoveRequest(
-                community_id="green-valley", request_type=RequestType.MOVE_OUT, resident_name="Rahul Mehta",
-                phone="9000022222", unit="A-201", resident_type=T, move_date=_next("Sat", 15, today), slot="14:00-18:00",
-                documents=_docs(("id_proof", "Rahul Mehta"), ("owner_noc", "Rahul Mehta")),
-                notes="Moving a piano, will need the service lift for the full slot.",
-            ),
-            dict(
-                summary="Rahul Mehta (tenant) is moving out of A-201. All checks pass and the documents are consistent.",
-                recommendation=Recommendation.APPROVE,
-                reasoning="He is the registered occupant, has no dues, and gave more than the 7-day notice. Move-outs aren't auto-approved in this community, so this needs your sign-off.",
-                risk_flags=[],
-                questions_for_resident=[],
             ),
         ),
         (
