@@ -288,7 +288,7 @@ Ten cases against the real Gemini reader using the fictional documents in `sampl
 | Document reader unavailable | The document is stored as unverified with a warning; a human checks it, and the request can't be auto-approved |
 | Wrong file type or too large | The upload is refused with a clear message |
 | Bad community config | Startup fails with the exact YAML and rule name |
-| Host restarts (free tier wipes the disk) | Demo units and five pre-reviewed requests are re-seeded on boot |
+| Host restarts (free tier wipes the disk) | Demo units and four pre-reviewed requests are re-seeded on boot |
 
 ---
 

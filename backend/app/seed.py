@@ -59,24 +59,9 @@ def _docs(*pairs: tuple[str, str]) -> list[Document]:
 
 
 def _demo_requests(today: date) -> list[tuple[MoveRequest, dict]]:
-    sat, sun = _next("Sat", 8, today), _next("Sun", 8, today)
+    # Karan Shah (B-302) is deliberately not seeded: he's created live in the demo.
+    sun = _next("Sun", 8, today)
     return [
-        (
-            MoveRequest(
-                community_id="green-valley", request_type=RequestType.MOVE_IN, resident_name="Karan Shah",
-                phone="9812345678", unit="B-302", resident_type=T, move_date=sat, slot="09:00-13:00", household_size=2,
-                documents=_docs(("id_proof", "Karan Shah"), ("rental_agreement", "K. Shah"),
-                                ("police_verification", "Karan Shah"), ("owner_noc", "Karan Shaw")),
-            ),
-            dict(
-                summary="Karan Shah (tenant) is moving into B-302 with one other person. All policy checks pass, but the owner's NOC is made out to a different name.",
-                recommendation=Recommendation.REQUEST_INFO,
-                reasoning="The NOC names 'Karan Shaw' while every other document and the request say 'Karan Shah'. "
-                "'K. Shah' on the rental agreement is a normal short form. An NOC must name the actual tenant, so this should be corrected before approval.",
-                risk_flags=["Owner NOC is issued to 'Karan Shaw', not 'Karan Shah'"],
-                questions_for_resident=["Your owner's NOC says 'Karan Shaw'. Could you upload a corrected NOC with your name as 'Karan Shah'?"],
-            ),
-        ),
         (
             MoveRequest(
                 community_id="green-valley", request_type=RequestType.MOVE_OUT, resident_name="Priya Nair",
