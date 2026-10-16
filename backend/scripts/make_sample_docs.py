@@ -98,6 +98,42 @@ def main() -> None:
         "Signed: Rajesh Kumar (Owner)",
     ])
 
+    # --- Rahul Mehta: tenant moving OUT of A-201, Green Valley ---
+    card("rahul_id_proof.png", "IDENTITY CARD (SAMPLE)",
+         [("Name", "Rahul Mehta"), ("Date of birth", "21-11-1990"), ("ID number", "SMPL-3304-0219"), ("Valid until", "2032-03-31")])
+    letter("rahul_owner_noc_moveout.png", "NO OBJECTION CERTIFICATE (SAMPLE)", [
+        "I, Sunita Verma, owner of flat A-201, Green Valley Residency, have no objection to my tenant Rahul Mehta vacating the flat and moving out his belongings.",
+        "The tenancy ends on 31 October 2026. Date: 12 October 2026.",
+        "Signed: Sunita Verma (Owner)",
+    ])
+
+    # --- Priya Nair: owner moving OUT of A-202, Green Valley (has dues) ---
+    card("priya_id_proof.png", "IDENTITY CARD (SAMPLE)",
+         [("Name", "Priya Nair"), ("Date of birth", "09-05-1985"), ("ID number", "SMPL-6612-0088"), ("Valid until", "2031-09-30")])
+
+    # --- Rohan Gupta: tenant moving INTO 102, Sunrise Heights ---
+    card("rohan_id_proof.png", "IDENTITY CARD (SAMPLE)",
+         [("Name", "Rohan Gupta"), ("Date of birth", "17-08-1995"), ("ID number", "SMPL-9045-0332"), ("Valid until", "2035-01-31")])
+    letter("rohan_rental_agreement.png", "RENTAL AGREEMENT (SAMPLE)", [
+        "This rental agreement is made on 5 October 2026 between Meena Iyer (the Owner) and Rohan Gupta (the Tenant).",
+        "The Owner lets flat 102, Sunrise Heights to the Tenant for a period of eleven months at a monthly rent of Rs 18,000.",
+        "Valid until: 2027-09-04. Registration no. SMPL/RA/2026/2045.",
+        "Signed: Meena Iyer (Owner)      Signed: Rohan Gupta (Tenant)",
+    ])
+
+    # --- Neha Kapoor: tenant moving OUT of 201, Sunrise Heights (dues only warn here) ---
+    card("neha_id_proof.png", "IDENTITY CARD (SAMPLE)",
+         [("Name", "Neha Kapoor"), ("Date of birth", "30-01-1992"), ("ID number", "SMPL-2278-0461"), ("Valid until", "2033-11-30")])
+    letter("neha_owner_noc_moveout.png", "NO OBJECTION CERTIFICATE (SAMPLE)", [
+        "I, Vivek Malhotra, owner of flat 201, Sunrise Heights, have no objection to my tenant Neha Kapoor vacating the flat.",
+        "Pending maintenance dues may be adjusted against the security deposit. Date: 10 October 2026.",
+        "Signed: Vivek Malhotra (Owner)",
+    ])
+
+    # --- Arjun Das: owner moving OUT of 202, Sunrise Heights ---
+    card("arjun_id_proof.png", "IDENTITY CARD (SAMPLE)",
+         [("Name", "Arjun Das"), ("Date of birth", "12-12-1980"), ("ID number", "SMPL-1190-0507"), ("Valid until", "2030-06-30")])
+
     # --- Deliberately WRONG documents for negative tests ---
     letter("BAD_karan_owner_noc_wrong_name.png", "NO OBJECTION CERTIFICATE (SAMPLE)", [
         "I, Rajesh Kumar, owner of flat B-302, Green Valley Residency, have no objection to Karan Shaw moving into the flat as my tenant.",
