@@ -9,12 +9,14 @@ reject, or touch anyone else's data. Conversation memory is persisted per
 request by a LangGraph checkpointer (thread_id = request id)."""
 
 import os
+import re
 import sqlite3
 from datetime import date, timedelta
 from typing import Literal
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelFallbackMiddleware
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -53,6 +55,18 @@ def checklist(req: MoveRequest) -> dict:
     }
 
 
+def _digits(text: str) -> str:
+    return re.sub(r"\D", "", text)
+
+
+def phone_was_typed(phone: str, resident_messages: list[str]) -> bool:
+    """Grounding check: the number the agent wants to save must appear in what
+    the resident actually typed. Format validation can't catch a well-formed
+    number the model made up; this can."""
+    candidate = _digits(phone)[-10:]
+    return len(candidate) == 10 and any(candidate in _digits(text) for text in resident_messages)
+
+
 def _tools(request_id: str):
     @tool
     def update_request_details(
@@ -65,6 +79,8 @@ def _tools(request_id: str):
         household_size: int | None = None,
         vehicle_count: int | None = None,
         notes: str | None = None,
+        *,
+        runtime: ToolRuntime,
     ) -> dict | str:
         """Save any details the resident has given. Pass only fields you learned. move_date must be YYYY-MM-DD;
         slot must exactly match one of the community's windows, e.g. "09:00-13:00"; phone must be a 10-digit
@@ -80,11 +96,22 @@ def _tools(request_id: str):
             "vehicle_count": vehicle_count,
             "notes": notes,
         }
+        # `runtime` is injected by LangGraph and hidden from the model, so the
+        # model can't fake what the resident said.
+        not_saved = []
+        resident_messages = [m.text for m in runtime.state["messages"] if m.type == "human"]
+        if phone and not phone_was_typed(phone, resident_messages):
+            fields["phone"] = None
+            not_saved.append("phone: not saved because it isn't a number the resident typed. "
+                             "Never invent or change a value; ask the resident for their 10-digit mobile number.")
         try:
             req = services.update_details(request_id, fields, actor=Actor.AGENT)
         except Exception as exc:
             return f"Could not save: {exc}"
-        return checklist(req)
+        result = checklist(req)
+        if not_saved:
+            result["not_saved"] = not_saved
+        return result
 
     @tool
     def get_checklist() -> dict:
@@ -137,6 +164,8 @@ How to work:
   right away and include the summary in your reply. Then explain what happens next.
 - After submission, answer status questions using get_checklist. If the admin asked a question, help the
   resident answer it (update details / upload), then resubmit with submit_request once they confirm.
+- Never invent, guess or "fix" a value. Save only what the resident actually said. If a value is rejected, tell
+  the resident why and ask them for it.
 - Only tell the resident something is saved or submitted if the tool result confirms it. If a tool returns
   an error ("Could not save", "Not submitted"), explain the problem plainly and how to fix it.
 - You cannot approve or reject requests; the management office decides. Be warm, brief, and practical.
