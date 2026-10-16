@@ -36,7 +36,7 @@ Moving in or out of a gated community is a compliance process that looks like a 
 Start (pick community, move-in / move-out)
   → Describe the move in plain language to the assistant
   → Assistant fills the request, asks only for what's missing, explains rules & fees
-  → Upload the documents it names (checklist updates live)
+  → Upload the documents it names; each one is read and checked by AI on upload
   → Confirm the summary → submit
   → Track: status, timeline, admin questions, gate pass
   → If "needs info": fix it (chat or form) → resubmit
@@ -47,6 +47,7 @@ Design choices and why:
 - **Conversation first, with the form always available.** *"I'm renting B-302, moving in next Saturday morning with my wife"* is the fastest way to give 6 fields. The assistant turns that into structured data (resolving "next Saturday" to a date and "morning" to a real slot window). A plain form sits alongside it because some people prefer forms, and because the resident must never be blocked when the AI is unavailable.
 - **The checklist is the source of truth, not the chat.** The right-hand panel always shows what's saved, what's missing and what's failing. The chat helps, but the resident never has to trust it blindly.
 - **The assistant asks only for what this community needs.** A tenant in Green Valley is asked for police verification. The same tenant in Sunrise Heights isn't, because that community doesn't require it.
+- **Documents are checked the moment they're uploaded.** Gemini reads each file, and the resident immediately sees ✓ verified or ✕ with the exact problem ("the name on the NOC is Karan Shaw, not Karan Shah"), instead of finding out days later from the office. The assistant explains the problem in the chat too.
 - **Confirm before submit.** The assistant summarises the request and submits only after an explicit "yes".
 - **The loop closes in one place.** After submission, the same page shows the admin's questions, lets the resident fix and resubmit, and finally shows the gate pass to present at the gate.
 
@@ -85,7 +86,8 @@ Design choices and why:
 │  tools bound to ONE request                 check_policy → assess(LLM)    │
 │   update_request_details                      → guardrail → [auto_approve │
 │   get_checklist · find_available_slots          → schedule] → persist     │
-│   submit_request · cancel_request                                         │
+│   submit_request · cancel_request          Document reader (multimodal)   │
+│                                             file → facts → doc_checks     │
 │              │                                        │                   │
 │              └──────────────┬─────────────────────────┘                   │
 │                     services.py  ◄── REST handlers (UI) use the same layer │
@@ -104,6 +106,8 @@ Design choices and why:
 | `services.py` | The only way to change a request. Validation, history log, slot booking, gate pass | No |
 | `agents/intake.py` | Resident-facing conversational agent | Yes |
 | `agents/review.py` | Admin-facing review pipeline | Yes (one node) |
+| `agents/documents.py` | Reads an uploaded file and returns facts (type, names, expiry) | Yes (one call) |
+| `core/doc_checks.py` | Judges those facts against the request (right type, right person, readable) | No |
 | `store.py` | Persistence behind a small interface | No |
 
 **Key principle: one path to change data.** The REST endpoints and the agents' tools both call `services.py`. So the agent can never do anything the UI couldn't, every change passes the same validation, and everything is recorded in the history with the acting role (`resident`, `admin`, `agent` or `system`).
@@ -123,6 +127,8 @@ Design choices and why:
 | Are the documents complete? Is notice sufficient? Dues cleared? Slot free? | **Code** (policy engine) | These must be exact, repeatable and auditable. An LLM guess here would be a liability |
 | Do names match across documents? Does a resubmission answer the admin's question? Anything odd in the notes? | **LLM** (review) | Fuzzy judgement that rules can't express: "K. Shah" ≈ "Karan Shah", but "Karan Shaw" is a different name |
 | Summarise for the admin, draft questions to the resident | **LLM** (review) | Saves the most admin time |
+| Read an uploaded document: what it is, whose names, expiry | **LLM** (multimodal document reader) | Reading varied scans and photos is a perception task code can't do |
+| Is that document acceptable for this request? | **Code** (`documents_verified` rule) | The decision must be deterministic and auditable |
 | Approve / reject | **Human by default.** Agent only under strict, configured conditions | Accountability |
 | Book the slot, issue the gate pass | **Agent or admin**, per community config | Mechanical once approved |
 
@@ -164,6 +170,23 @@ check_policy ──► assess ──► guardrail ──┬─► auto_approve �
 
 The boundaries are enforced in code at three layers: the tools (scoped to one request), the service layer (validation), and the state machine (who may make which transition). The prompt explains the boundaries to the model, but the code is what enforces them.
 
+### 4.5 Document verification: the AI reads, code judges
+
+```
+upload (PNG/JPG/WEBP/PDF, ≤ 5 MB)
+  → Gemini, multimodal + structured output: is it a document? which type? names? expiry date?   (facts only)
+  → stored on the document as a DocumentCheck; the file itself is discarded
+  → documents_verified rule (code): unreadable? wrong type? resident's name on it?
+  → document_validity rule (code): expired before the move date?
+```
+
+- **The model never decides.** It only reports what's written. The `documents_verified` rule judges those facts live, so if the resident later corrects their name, the verdict updates without calling the AI again.
+- **Name matching tolerates real-world variation:** titles are ignored and an initial matches a full first name ("K. Shah" = "Karan Shah"), but a different surname is a mismatch ("Karan Shaw" ≠ "Karan Shah").
+- **If the AI can't read the file** (rate limit, outage), the document is stored as *unverified*. That's a warning: an admin can approve after looking at it, but the request **can never be auto-approved**.
+- **Everyone sees the same verdicts:** the resident's upload panel (✓ / ✕ per document), the chat agent (through its checklist, with a prompt rule to explain problems and ask for a corrected upload), and the admin (verdict, the names the AI read, any AI note, and a timeline entry for every check).
+- **Privacy:** files are processed and discarded; only the extracted facts are stored.
+- **Phone numbers** are validated in the data model as 10-digit Indian mobiles (`+91 98765 43210` → `9876543210`), so the form, the API and the agent's tools all get the same check.
+
 ---
 
 ## 5. Scalability: configuration vs core logic
@@ -191,7 +214,7 @@ The **Community rules** page in the prototype shows this side by side.
 **How it grows:**
 
 - **New community:** add a YAML file. It's validated at startup (`validate_config` fails fast if a YAML names a rule that doesn't exist).
-- **New rule** (e.g. "no moves during festival week", "max 2 vehicles"): write one ~10-line function decorated with `@rule("name")`, and any community can turn it on in YAML.
+- **New rule** (e.g. "no moves during festival week", "max 2 vehicles"): write one ~10-line function decorated with `@rule("name")`, and any community can turn it on in YAML. AI document verification was added exactly this way: one `documents_verified` rule plus one YAML line per community, with no changes to the engine, the state machine or the agents' structure.
 - **New request type** (e.g. interior renovation, pet registration): add a `RequestType` value and a YAML block. The state machine, agents and UI are generic over request types.
 - **Production step:** the YAML becomes rows in a database with an admin UI for editing them. The schema (`CommunityConfig`) stays the same.
 
@@ -203,7 +226,8 @@ The **Community rules** page in the prototype shows this side by side.
 |---|---|---|
 | No real login; a role switch in the nav, and the resident's requests are remembered in the browser | Keeps the demo usable without creating accounts | ANACITY's existing resident/admin identity. Residents would be linked to units, and admins scoped to their communities |
 | Unit occupancy and dues come from a seeded table | These normally live in ANACITY's resident and billing systems | Read through integrations. Policy rules would call those services instead of `store.get_unit` |
-| Documents store **metadata only** (type, file name, name on it, expiry). The name/expiry are typed in by the resident | File storage and OCR are out of scope for a 24-hour prototype. The metadata is enough to show consistency checking | Files in object storage. OCR / document AI would extract names and dates instead of the resident typing them, and the review agent would reason over the extracted fields |
+| Uploaded files are read by Gemini and then discarded; only the extracted facts are kept. Test documents are fictional and watermarked SPECIMEN, and the reader is told not to treat the watermark as a problem (`DOC_CHECK_ACCEPT_SPECIMENS`) | Avoids storing personal documents in a prototype; real IDs can't be used for testing | Encrypted object storage if retention is legally required, ID-number masking, tamper and photo checks, and a human review queue for low-confidence reads. Specimen acceptance turned off |
+| Phone numbers are Indian mobiles | The product is for Indian societies | Country-aware validation if needed |
 | Fees and deposits are collected by the office, outside the system | No payment integration | A payment step between approval and scheduling, with a `deposit_paid` rule |
 | "Security notified" is a timeline entry | No SMS / WhatsApp / guard-app integration | Push the gate pass to the security app and to the resident via their preferred channel |
 | Time slots are the only shared resource (capacity per window) | Stands in for the service lift and the loading bay | Model lifts and loading bays as separate resources, possibly per tower |
@@ -214,7 +238,7 @@ The **Community rules** page in the prototype shows this side by side.
 
 ## 7. Testing and results
 
-### Automated tests (`cd backend && uv run pytest`): 20 passing
+### Automated tests (`cd backend && uv run pytest`): 49 passing
 
 - **Policy engine:** every rule, including pending vs fail for incomplete drafts.
 - **Per-community behaviour:** the same request is auto-approvable in Green Valley and needs a human in Sunrise Heights; the same dues block in one community and only warn in the other.
@@ -222,6 +246,12 @@ The **Community rules** page in the prototype shows this side by side.
 - **API end to end with the LLM disabled:** auto-approval and gate pass; incomplete submission refused; the dues → needs-info → resubmit round trip; an override without a reason refused; manual scheduling in Sunrise Heights; booked slots removed from availability; the admin brief hidden from residents.
 - **Agent tools (no LLM):** details are saved correctly, invalid values return an error instead of crashing, and the agent can't submit an incomplete request.
 - **Config validation:** every YAML only references rules that exist.
+- **Document verification (AI reading faked, so tests are fast and repeatable):** name matching (initials, titles, the "Shaw/Shah" case); verdicts for verified, wrong name, wrong type, unreadable, unverified and waiting; a wrong-name upload flagged then fixed by re-upload; a receipt rejected as an ID; AI unavailable → unverified and never auto-approved; expiry read from the document failing `document_validity`; bad file types and sizes rejected.
+- **Phone validation:** common formats normalised to 10 digits; invalid numbers rejected with a clear 400 (this also fixed invalid form input returning a 500).
+
+### Real-model document eval (`cd backend && uv run python scripts/eval_documents.py`)
+
+Ten cases against the real Gemini reader using the fictional documents in `samples/documents/`: six correct documents, an NOC naming "Karan Shaw", an expired police verification, a grocery receipt uploaded as an ID, and a correct rental agreement uploaded in the ID slot. **All 10 verdicts and expiry dates were correct** (flash-lite read each in about 2–4s).
 
 ### Live testing with Gemini (manual)
 
@@ -233,6 +263,7 @@ The **Community rules** page in the prototype shows this side by side.
 | Tenant move-out where every rule passes, but the note says *"Owner NOC attached is from the previous landlord, new owner is signing this week"* (hosted) | Review agent flagged the NOC as invalid from the note alone and recommended *request info*, asking for an NOC from the current owner. No rule could catch this (3.9s on the live site) |
 | Tenant asks for a Wednesday in a weekend-only community (hosted) | Agent saved the valid details, **refused to save the disallowed date**, explained the rule and offered real weekend slots. After *"Sunday 11th Oct morning then"* it saved `2026-10-11 09:00-13:00` |
 | *"Arjun Das here, I own 202 and am moving out next Friday evening"* (hosted, 3 runs) | All 3 runs saved Oct 9 `16:00-20:00` (Sunrise Heights' evening window), taking 2.4–14s per turn |
+| Tenant uploads three correct documents and an NOC naming "Karan Shaw", then asks *"Can I submit now?"* (local, then hosted) | Gemini read all four; the NOC was flagged by the rule; the agent replied that the NOC name doesn't match and asked for a corrected upload. After re-uploading the correct NOC, all four were verified, the agent submitted, and the review recommended approve with no flags |
 
 ### Problems found by testing, and what changed
 
@@ -254,6 +285,8 @@ The **Community rules** page in the prototype shows this side by side.
 | Agent passes bad data to a tool | Pydantic / service validation rejects it and the tool returns an error the agent can recover from. Nothing malformed is stored |
 | Invalid status change (from any role) | The state machine refuses it with a clear error |
 | Slot taken between approval and scheduling | Scheduling re-checks capacity and refuses, and the admin asks the resident to pick another slot |
+| Document reader unavailable | The document is stored as unverified with a warning; a human checks it, and the request can't be auto-approved |
+| Wrong file type or too large | The upload is refused with a clear message |
 | Bad community config | Startup fails with the exact YAML and rule name |
 | Host restarts (free tier wipes the disk) | Demo units and five pre-reviewed requests are re-seeded on boot |
 
@@ -262,7 +295,7 @@ The **Community rules** page in the prototype shows this side by side.
 ## 9. Limitations and trade-offs
 
 - **SQLite on an ephemeral free host.** New requests are lost when the host restarts. That's acceptable for a demo; production would use Postgres, and only `store.py` changes.
-- **Documents are metadata, not files.** The consistency checks are real, but they run on names the resident types in, not on extracted text.
+- **Document checks verify content, not authenticity.** The AI confirms what a document says (type, names, expiry); it doesn't detect forgery or match a photo to the person. That needs dedicated document-fraud tooling or an official verification API.
 - **No authentication.** Anyone with a request's URL can view it.
 - **Synchronous LLM calls.** A chat reply takes a few seconds, and the review runs inside the submit request. Production would stream chat tokens and run the review in a background worker.
 - **One LLM call for the review.** It's cheap, fast and easy to reason about. A multi-step reviewer (e.g. one that fetches documents or history on demand) could catch more, but it would be slower and harder to audit.
@@ -274,7 +307,7 @@ The **Community rules** page in the prototype shows this side by side.
 ## 10. Next steps toward production
 
 1. **Integrations:** ANACITY identity, unit / occupancy / billing APIs, payments, the security or gate app, and notifications.
-2. **Document intelligence:** file storage, plus OCR / document AI to extract names, dates and IDs, so the review agent reasons over the documents themselves.
+2. **Stronger document checks:** authenticity and tamper detection, official verification APIs where available, ID-number masking, confidence scores with a human review queue for uncertain reads, and secure storage if retention is required.
 3. **Configuration as data:** community configs in a database, with an admin UI, version history, and a "preview impact" check before a rule change goes live.
 4. **Reliability:** Postgres, a background worker for reviews, streaming chat, idempotent actions, and retries with backoff on a paid LLM tier.
 5. **Evaluation:** a labelled set of requests (clean, missing documents, name mismatches, occupied units, dues) run on every prompt or model change. Track extraction accuracy, recommendation agreement with admins, and the auto-approval false-positive rate. Auto-approval scope should only grow when these numbers justify it.
