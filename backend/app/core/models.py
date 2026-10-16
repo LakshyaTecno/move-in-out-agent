@@ -1,11 +1,12 @@
 """Core domain types. These are the same for every community; per-community
 differences live in the YAML configs under app/communities/."""
 
+import re
 from datetime import date, datetime, timezone
 from enum import StrEnum
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class RequestType(StrEnum):
@@ -87,6 +88,22 @@ class MoveRequest(BaseModel):
     review: "ReviewBrief | None" = None
     info_request: str | None = None  # admin's question when status is NEEDS_INFO
     gate_pass: str | None = None  # issued when the move is scheduled
+
+    @field_validator("phone")
+    @classmethod
+    def indian_mobile(cls, value: str | None) -> str | None:
+        """Accept common ways people type an Indian mobile ("+91 98765 43210",
+        "098765-43210") and store just the 10 digits."""
+        if value is None:
+            return None
+        digits = re.sub(r"\D", "", value)
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        elif len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+        if not re.fullmatch(r"[6-9]\d{9}", digits):
+            raise ValueError("phone must be a 10-digit Indian mobile number starting with 6-9")
+        return digits
 
     def doc_types(self) -> set[str]:
         return {d.doc_type for d in self.documents}

@@ -99,3 +99,12 @@ def test_booked_slot_disappears_from_availability(client):
     client.post(f"/requests/{rid}/submit")
     free = client.get("/communities/green-valley/slots", params={"start": date, "days": 1}).json()
     assert {"slot": "09:00-13:00"} not in [{"slot": s["slot"]} for s in free]
+
+
+def test_invalid_phone_gives_clear_400_not_500(client):
+    rid = client.post("/requests", json={"community_id": "green-valley", "request_type": "move_in"}).json()["id"]
+    r = client.patch(f"/requests/{rid}", json={"phone": "12345"})
+    assert r.status_code == 400
+    assert "10-digit Indian mobile" in r.json()["detail"]
+    ok = client.patch(f"/requests/{rid}", json={"phone": "+91 98765 43210"})
+    assert ok.json()["phone"] == "9876543210"

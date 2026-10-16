@@ -61,7 +61,8 @@ def _tools(request_id: str):
         notes: str | None = None,
     ) -> dict | str:
         """Save any details the resident has given. Pass only fields you learned. move_date must be YYYY-MM-DD;
-        slot must exactly match one of the community's windows, e.g. "09:00-13:00". Returns the updated checklist."""
+        slot must exactly match one of the community's windows, e.g. "09:00-13:00"; phone must be a 10-digit
+        Indian mobile number. Returns the updated checklist."""
         fields = {
             "resident_name": resident_name,
             "phone": phone,

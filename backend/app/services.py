@@ -7,6 +7,8 @@ validation, state machine, and history log."""
 import secrets
 from datetime import date, timedelta
 
+from pydantic import ValidationError
+
 from app import store
 from app.core.community import get_community
 from app.core.models import Actor, Document, HistoryEvent, MoveRequest, RequestType, RuleResult, Status
@@ -100,7 +102,11 @@ def update_details(request_id: str, fields: dict, actor: Actor = Actor.RESIDENT)
     if "unit" in changes:
         changes["unit"] = str(changes["unit"]).strip().upper()
     # Re-validate through pydantic so the agent can't store malformed values.
-    updated = MoveRequest.model_validate(req.model_dump() | changes)
+    try:
+        updated = MoveRequest.model_validate(req.model_dump() | changes)
+    except ValidationError as exc:
+        problems = "; ".join(f"{e['loc'][0]}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors())
+        raise ServiceError(f"Invalid details: {problems}") from None
     if changes:
         _log(updated, actor, "details_updated", ", ".join(f"{k}={v}" for k, v in changes.items()))
     return store.save_request(updated)

@@ -137,3 +137,19 @@ def test_cannot_skip_review():
     req = owner_move_in("green-valley", status=Status.SUBMITTED)
     with pytest.raises(InvalidTransition):
         transition(req, Status.APPROVED, Actor.ADMIN)
+
+
+@pytest.mark.parametrize("typed, stored", [
+    ("9876543210", "9876543210"),
+    ("+91 98765 43210", "9876543210"),
+    ("098765-43210", "9876543210"),
+    ("91-6123456789", "6123456789"),
+])
+def test_phone_is_normalised_to_ten_digits(typed, stored):
+    assert owner_move_in("green-valley", phone=typed).phone == stored
+
+
+@pytest.mark.parametrize("bad", ["12345", "98765432101", "5876543210", "abcdefghij", "+1 415 555 0100"])
+def test_invalid_phone_is_rejected(bad):
+    with pytest.raises(ValueError, match="10-digit Indian mobile"):
+        owner_move_in("green-valley", phone=bad)
